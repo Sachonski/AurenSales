@@ -1,8 +1,3 @@
-// Vercel serverless function — proxies Onyx External User Activities API
-// Required env vars:
-//   ONYX_API_KEY      — API key with "External user activities" + "External teams" resources
-//   ONYX_API_BASE_URL — e.g. https://api.onyxplatform.com
-
 const BASE = (process.env.ONYX_API_BASE_URL || '').replace(/\/$/, '')
 const KEY  = process.env.ONYX_API_KEY || ''
 const TEAM = 'The A-Team'
@@ -23,7 +18,6 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    // 1. Get all teams to find The A-Team ID
     const teamsRes = await onyxFetch('/external/v1/teams')
     if (!teamsRes.ok) {
       const text = await teamsRes.text()
@@ -33,7 +27,6 @@ module.exports = async function handler(req, res) {
     const teams = teamsData.teams || teamsData.results || teamsData || []
     const team = teams.find(t => t.name === TEAM)
 
-    // 2. Get current user activities (all pages)
     let page = 1
     let allUsers = []
     while (true) {
@@ -49,7 +42,6 @@ module.exports = async function handler(req, res) {
       page++
     }
 
-    // 3. Filter: available (Online / Direct Inbound) + in The A-Team
     const teamMemberIds = team
       ? new Set((team.member_ids || team.members || []).map(String))
       : null
@@ -58,11 +50,11 @@ module.exports = async function handler(req, res) {
       .filter(u => ['Online', 'Direct Inbound'].includes(u.activity))
       .filter(u => !teamMemberIds || teamMemberIds.has(String(u.id || u.user_id)))
       .map(u => ({
-        userId:        u.id || u.user_id,
-        name:          u.name || `${u.first_name || ''} ${u.last_name || ''}`.trim(),
-        activity:      u.activity,
-        profileName:   u.worker_profile || u.agent_profile || '—',
-        startedAt:     u.started_at,
+        userId:          u.id || u.user_id,
+        name:            u.name || `${u.first_name || ''} ${u.last_name || ''}`.trim(),
+        activity:        u.activity,
+        profileName:     u.worker_profile || u.agent_profile || '—',
+        startedAt:       u.started_at,
         secondsInStatus: u.started_at
           ? Math.round((Date.now() - new Date(u.started_at).getTime()) / 1000)
           : 0,
