@@ -1,20 +1,24 @@
 const https = require('https')
 
-const BASE = (process.env.ONYX_API_BASE_URL || '').replace(/\/$/, '')
-const KEY  = process.env.ONYX_API_KEY || ''
+const BASE    = (process.env.ONYX_API_BASE_URL || 'https://api.onyxplatform.com').replace(/\/$/, '')
+const KEY     = process.env.ONYX_API_KEY || ''
+const TEAM_ID = process.env.ONYX_TEAM_ID || '74'
 
-function get(path) {
+function get(path, query = {}) {
   return new Promise((resolve, reject) => {
     const url = new URL(BASE + path)
-    const options = {
+    Object.entries(query).forEach(([k, v]) => {
+      if (Array.isArray(v)) v.forEach(val => url.searchParams.append(k, val))
+      else url.searchParams.set(k, v)
+    })
+    const req = https.request({
       hostname: url.hostname,
       path: url.pathname + url.search,
       method: 'GET',
       headers: { 'X-Api-Key': KEY, 'Content-Type': 'application/json' },
-    }
-    const req = https.request(options, (res) => {
+    }, (res) => {
       let data = ''
-      res.on('data', chunk => data += chunk)
+      res.on('data', c => data += c)
       res.on('end', () => resolve({ status: res.statusCode, body: data }))
     })
     req.on('error', reject)
@@ -24,46 +28,35 @@ function get(path) {
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
-  if (!BASE || !KEY) return res.status(500).json({ error: 'Missing env vars' })
-
-  const PATHS = [
-    '/external/v1/user-activities/current',
-    '/api/external/v1/user-activities/current',
-    '/external/user-activities/current',
-    '/api/v1/user-activities/current',
-  ]
+  if (!KEY) return res.status(500).json({ error: 'ONYX_API_KEY env var is required' })
 
   try {
-    let workingPath = null
-    let actData = null
-    for (const path of PATHS) {
-      const r = await get(path)
-      if (r.status === 200) {
-        workingPath = path
-        actData = JSON.parse(r.body)
-        break
-      }
+    const r = await get('/api/v1/supervisor/workers', {
+      page: 1, page_size: 100,
+      activities: ['ONLINE', 'RESERVED', 'DIRECT_INBOUND'],
+      team_id: TEAM_ID,
+    })
+
+    if (r.status !== 200) {
+      return res.status(502).json({ error: `Onyx API ${r.status}`, body: r.body })
     }
 
-    if (!workingPath) {
-      return res.status(502).json({ error: 'No working path found', tried: PATHS, base: BASE })
-    }
+    const data = JSON.parse(r.body)
+    const workers = data.results || data.workers || data || []
 
-    const rows = actData.users || actData.results || (Array.isArray(actData) ? actData : [])
-    const available = rows
-      .filter(u => ['Online', 'Direct Inbound'].includes(u.activity))
-      .map(u => ({
-        userId: u.id || u.user_id,
-        name: u.name || `${u.first_name || ''} ${u.last_name || ''}`.trim(),
-        activity: u.activity,
-        profileName: u.worker_profile || u.agent_profile || u.profile || '—',
-        secondsInStatus: u.started_at
-          ? Math.round((Date.now() - new Date(u.started_at).getTime()) / 1000) : 0,
-      }))
-      .sort((a, b) => b.secondsInStatus - a.secondsInStatus)
+    const agents = workers.map(w => ({
+      userId:          w.id || w.user_id,
+      name:            w.friendly_name || w.name || `${w.first_name||''} ${w.last_name||''}`.trim(),
+      activity:        w.activity_name || w.current_activity || w.activity,
+      profileName:     w.worker_profile_name || w.profile_name || '—',
+      secondsInStatus: w.time_in_current_activity != null
+        ? w.time_in_current_activity
+        : (w.activity_started_at ? Math.round((Date.now()-new Date(w.activity_started_at))/1000) : 0),
+    }))
+    .sort((a, b) => b.secondsInStatus - a.secondsInStatus)
 
-    return res.status(200).json({ agents: available, path: workingPath })
+    return res.status(200).json({ agents, sample: workers[0] || null })
   } catch (err) {
-    return res.status(500).json({ error: err.message, stack: err.stack })
+    return res.status(500).json({ error: err.message })
   }
 }
