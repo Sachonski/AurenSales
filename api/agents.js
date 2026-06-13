@@ -1,19 +1,24 @@
+const https = require('https')
+
 const BASE = (process.env.ONYX_API_BASE_URL || '').replace(/\/$/, '')
 const KEY  = process.env.ONYX_API_KEY || ''
 
-const ACTIVITY_PATHS = [
-  '/external/v1/user-activities/current',
-  '/api/external/v1/user-activities/current',
-  '/v1/external/user-activities/current',
-  '/external/user-activities/current',
-  '/api/v1/user-activities/current',
-]
-
-async function tryFetch(path, params = {}) {
-  const url = new URL(BASE + path)
-  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
-  return fetch(url.toString(), {
-    headers: { 'X-Api-Key': KEY, 'Content-Type': 'application/json' },
+function get(path) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(BASE + path)
+    const options = {
+      hostname: url.hostname,
+      path: url.pathname + url.search,
+      method: 'GET',
+      headers: { 'X-Api-Key': KEY, 'Content-Type': 'application/json' },
+    }
+    const req = https.request(options, (res) => {
+      let data = ''
+      res.on('data', chunk => data += chunk)
+      res.on('end', () => resolve({ status: res.statusCode, body: data }))
+    })
+    req.on('error', reject)
+    req.end()
   })
 }
 
@@ -21,32 +26,31 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   if (!BASE || !KEY) return res.status(500).json({ error: 'Missing env vars' })
 
-  // Find working path
-  let workingPath = null
-  let actData = null
-  for (const path of ACTIVITY_PATHS) {
-    const r = await tryFetch(path)
-    if (r.ok) { workingPath = path; actData = await r.json(); break }
-  }
-
-  if (!workingPath) {
-    return res.status(502).json({ error: 'No working path found', tried: ACTIVITY_PATHS, base: BASE })
-  }
+  const PATHS = [
+    '/external/v1/user-activities/current',
+    '/api/external/v1/user-activities/current',
+    '/external/user-activities/current',
+    '/api/v1/user-activities/current',
+  ]
 
   try {
-    let allUsers = actData.users || actData.results || actData || []
-    let pageData = actData
-    let page = 2
-    while (pageData.next) {
-      const r = await tryFetch(workingPath, { page })
-      if (!r.ok) break
-      pageData = await r.json()
-      const rows = pageData.users || pageData.results || pageData || []
-      allUsers = allUsers.concat(rows)
-      page++
+    let workingPath = null
+    let actData = null
+    for (const path of PATHS) {
+      const r = await get(path)
+      if (r.status === 200) {
+        workingPath = path
+        actData = JSON.parse(r.body)
+        break
+      }
     }
 
-    const available = allUsers
+    if (!workingPath) {
+      return res.status(502).json({ error: 'No working path found', tried: PATHS, base: BASE })
+    }
+
+    const rows = actData.users || actData.results || (Array.isArray(actData) ? actData : [])
+    const available = rows
       .filter(u => ['Online', 'Direct Inbound'].includes(u.activity))
       .map(u => ({
         userId: u.id || u.user_id,
@@ -60,6 +64,6 @@ module.exports = async function handler(req, res) {
 
     return res.status(200).json({ agents: available, path: workingPath })
   } catch (err) {
-    return res.status(500).json({ error: err.message })
+    return res.status(500).json({ error: err.message, stack: err.stack })
   }
 }
