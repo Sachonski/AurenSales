@@ -240,7 +240,7 @@ async function loadData(manual){
   }finally{if(manual){btn.disabled=false;btn.classList.remove("spin");}}
 }
 
-document.getElementById("autotxt").textContent=`Auto-refresh every ${REFRESH_MS/1000}s`;
+document.getElementById("autotxt").textContent=`Manual refresh only — tap Refresh to update`;
 loadData(false);
-setInterval(()=>loadData(false), REFRESH_MS);
+
 </script>
