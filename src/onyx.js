@@ -1,54 +1,113 @@
 // src/onyx.js
-// Talks to the Onyx MCP server using your API key and runs the agent-status query.
-// If Onyx isn't configured (or a call fails) the server falls back to the bundled
-// snapshot so the dashboard always renders something for the team.
+// Pulls live agent status from the Onyx REST API (External User Activities)
+// and merges it onto the static roster of Inbound Home Health Agents.
 
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 
-const PROFILE_ID = 511; // "Inbound Home Health Agent"
-
-// The exact query, validated against Onyx. Returns one row per active agent on the profile,
-// ordered by longest time in current status first.
-export const AGENTS_SQL = `SELECT u.id AS user_id, u.first_name || ' ' || u.last_name AS agent_name, COALESCE(string_agg(DISTINCT t.name, ', '), '') AS team_name, wp.name AS agent_profile, wq.work_type, wq.worker_type, wq.current_activity AS status, wq.current_activity_updated_at, wq.license_states, wq.crm_group_ids, CASE WHEN wpl.override_enabled THEN wpl.override_level ELSE wpl.calculated_level END AS agent_level, caps.call_cap_daily, caps.call_cap_hourly FROM workers_queue wq JOIN users u ON u.id = wq.user_id JOIN worker_profiles wp ON wp.id = wq.worker_profile_id LEFT JOIN team_members tm ON tm.user_id = u.id LEFT JOIN teams t ON t.id = tm.team_id LEFT JOIN worker_profile_levels wpl ON wpl.user_id = u.id AND wpl.worker_profile_id = wq.worker_profile_id LEFT JOIN user_worker_profile_rels upr ON upr.user_id = u.id AND upr.worker_profile_id = wq.worker_profile_id AND upr.status = 'ENABLED' LEFT JOIN user_worker_profile_call_caps caps ON caps.user_worker_profile_rel_id = upr.id AND caps.is_active = true WHERE wq.worker_profile_id = ${PROFILE_ID} AND wq.is_active_profile = true GROUP BY u.id, u.first_name, u.last_name, wp.name, wq.work_type, wq.worker_type, wq.current_activity, wq.current_activity_updated_at, wq.license_states, wq.crm_group_ids, wpl.override_enabled, wpl.override_level, wpl.calculated_level, caps.call_cap_daily, caps.call_cap_hourly ORDER BY wq.current_activity_updated_at ASC`;
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const {
-  ONYX_MCP_URL = "https://mcp.onyxplatform.com",
   ONYX_API_KEY = "",
-  ONYX_AUTH_HEADER = "Authorization",          // header name your key goes in
-  ONYX_AUTH_SCHEME = "Bearer",                  // prefix; set to "" if your key is raw
-  ONYX_SQL_TOOL = "sql_execute_query"           // native MCP tool name on the server
+  ONYX_API_BASE = "https://api.onyxplatform.com",
+  ONYX_ORG = "",                       // organization_name slug, e.g. "auren-health"
+  ONYX_AUTH_HEADER = "Authorization",
+  ONYX_AUTH_SCHEME = "Bearer"
 } = process.env;
 
-export const onyxConfigured = Boolean(ONYX_API_KEY);
+export const onyxConfigured = Boolean(ONYX_API_KEY && ONYX_ORG);
+
+// Static attributes for the 22 IHHA agents, keyed by Onyx user_id.
+const roster = JSON.parse(await readFile(join(__dirname, "..", "data", "roster.json"), "utf8"));
 
 function authHeaders() {
   const value = ONYX_AUTH_SCHEME ? `${ONYX_AUTH_SCHEME} ${ONYX_API_KEY}` : ONYX_API_KEY;
-  return { [ONYX_AUTH_HEADER]: value };
+  return { [ONYX_AUTH_HEADER]: value, Accept: "application/json" };
 }
 
-// Runs the SQL via the Onyx MCP server and returns { columns, rows }.
-export async function queryAgents() {
-  if (!onyxConfigured) {
-    throw new Error("Onyx not configured (set ONYX_API_KEY).");
-  }
-  const transport = new StreamableHTTPClientTransport(new URL(ONYX_MCP_URL), {
-    requestInit: { headers: authHeaders() }
-  });
-  const client = new Client({ name: "ihha-dashboard", version: "1.0.0" }, { capabilities: {} });
+// Normalize whatever the API returns into the display labels the UI expects.
+function normalizeStatus(s) {
+  if (!s) return "Logged Out";
+  const k = String(s).trim().toLowerCase().replace(/[_\s]+/g, "_");
+  const map = {
+    online: "Online", available: "Online",
+    offline: "Offline", not_available: "Offline",
+    on_call: "On Call", oncall: "On Call",
+    reserved: "Reserved",
+    dispositioning: "Dispositioning",
+    direct_inbound: "Direct Inbound",
+    logged_out: "Logged Out", loggedout: "Logged Out"
+  };
+  return map[k] || String(s);
+}
 
-  try {
-    await client.connect(transport);
-    const res = await client.callTool({
-      name: ONYX_SQL_TOOL,
-      arguments: { params: { sql: AGENTS_SQL } }
-    });
-    const block = (res.content || []).find((c) => c.type === "text");
-    if (!block?.text) throw new Error("Onyx returned no text result.");
-    const parsed = JSON.parse(block.text);
-    if (!parsed.columns || !parsed.rows) throw new Error("Unexpected Onyx result shape.");
-    return parsed;
-  } finally {
-    try { await client.close(); } catch { /* ignore */ }
+// Try several likely field names so we're resilient to the exact schema.
+const pick = (o, keys) => { for (const k of keys) if (o?.[k] != null) return o[k]; return null; };
+
+function extractList(payload) {
+  if (Array.isArray(payload)) return payload;
+  return payload?.items || payload?.data || payload?.results || payload?.activities || [];
+}
+
+// Fetch current activity for every user in the org (handles simple pagination).
+async function fetchActivities() {
+  const base = `${ONYX_API_BASE}/api/external/v1/user-activities/${encodeURIComponent(ONYX_ORG)}`;
+  const out = [];
+  let page = 1;
+  for (let i = 0; i < 50; i++) {            // hard cap on pages
+    const url = `${base}?page=${page}`;
+    const res = await fetch(url, { headers: authHeaders() });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status} from Onyx${body ? " — " + body.slice(0, 200) : ""}`);
+    }
+    const payload = await res.json();
+    const list = extractList(payload);
+    out.push(...list);
+    const hasMore = payload?.has_more || payload?.next_page || (payload?.total_pages && page < payload.total_pages);
+    if (!list.length || !hasMore) break;
+    page += 1;
   }
+  return out;
+}
+
+// Returns { columns, rows } in the same shape the UI already consumes.
+export async function queryAgents() {
+  if (!onyxConfigured) throw new Error("Onyx not configured (set ONYX_API_KEY and ONYX_ORG).");
+
+  const activities = await fetchActivities();
+
+  // Index live activity by user_id.
+  const live = {};
+  for (const a of activities) {
+    const uid = pick(a, ["user_id", "userId", "id", "user"]);
+    if (uid == null) continue;
+    live[String(uid)] = {
+      status: normalizeStatus(pick(a, ["activity", "current_activity", "status", "state"])),
+      started_at: pick(a, ["started_at", "activity_started_at", "current_activity_updated_at", "since", "updated_at"])
+    };
+  }
+
+  const columns = ["user_id","agent_name","team_name","agent_profile","work_type","worker_type",
+                   "status","current_activity_updated_at","license_states","crm_group_ids",
+                   "agent_level","call_cap_daily","call_cap_hourly"].map((name) => ({ name }));
+
+  const rows = Object.entries(roster).map(([uid, r]) => {
+    const l = live[uid] || { status: "Logged Out", started_at: null };
+    return [
+      Number(uid), r.agent_name, r.team_name, r.agent_profile, r.work_type, r.worker_type,
+      l.status, l.started_at, r.license_states, r.crm_group_ids,
+      r.agent_level, r.call_cap_daily, r.call_cap_hourly
+    ];
+  });
+
+  return { columns, rows, _live_count: activities.length };
+}
+
+// Expose a raw sample for debugging the response shape on first run.
+export async function debugSample() {
+  if (!onyxConfigured) return { configured: false };
+  const list = await fetchActivities();
+  return { configured: true, count: list.length, sample: list.slice(0, 2) };
 }

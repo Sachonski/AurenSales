@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-06-13T06:30:00Z",
+  "captured_at": "2026-06-13T18:30:00Z",
   "columns": [
     {"name":"user_id"},{"name":"agent_name"},{"name":"team_name"},{"name":"agent_profile"},
     {"name":"work_type"},{"name":"worker_type"},{"name":"status"},{"name":"current_activity_updated_at"},
