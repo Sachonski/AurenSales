@@ -1,39 +1,29 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Inbound Home Health Agent · Real Time Ops</title>
+<title>Inbound Home Health · Today's Activity</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root{
-    --bg:#0c1016;--panel:#141b25;--panel-2:#0f151e;--line:#222d3b;--line-soft:#1a2330;
-    --ink:#e7eef6;--ink-mut:#8493a6;--ink-dim:#5d6b7d;--accent:#35d6c0;--accent-dim:#1d6b62;
-    --on-call:#37c172;--dispo:#5c8ff0;--online:#35d6c0;--na:#e5594f;--logout:#6a7989;--available:#35d6c0;--radius:10px;
-  }
+  :root{--bg:#0c1016;--panel:#141b25;--panel-2:#0f151e;--line:#222d3b;--line-soft:#1a2330;--ink:#e7eef6;--ink-mut:#8493a6;--ink-dim:#5d6b7d;--accent:#35d6c0;--accent-dim:#1d6b62;--on-call:#37c172;--na:#e5594f;--available:#35d6c0;--radius:10px}
   *{box-sizing:border-box}html,body{margin:0}
   body{background:radial-gradient(1200px 600px at 80% -10%,#16202d 0%,transparent 60%),var(--bg);color:var(--ink);font-family:"Inter",system-ui,sans-serif;font-size:14px;line-height:1.4;min-height:100vh;-webkit-font-smoothing:antialiased}
   .mono{font-family:"JetBrains Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
-  .wrap{max-width:1320px;margin:0 auto;padding:22px 22px 60px}
+  .wrap{max-width:1280px;margin:0 auto;padding:22px 22px 60px}
   header.topbar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-bottom:18px;border-bottom:1px solid var(--line);margin-bottom:20px}
-  .brand{display:flex;align-items:baseline;gap:10px}
-  .brand .mark{font-weight:700;font-size:20px;letter-spacing:-.02em}
-  .brand .mark b{color:var(--accent)}
-  .brand .sub{color:var(--ink-mut);font-size:12px;letter-spacing:.14em;text-transform:uppercase}
+  .brand .mark{font-weight:700;font-size:20px;letter-spacing:-.02em}.brand .mark b{color:var(--accent)}
+  .brand .sub{color:var(--ink-mut);font-size:12px;letter-spacing:.14em;text-transform:uppercase;margin-left:8px}
   .org{margin-left:auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-  .org .label{font-size:11px;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.12em}
-  .org .name{font-weight:600}
+  .org .label{font-size:11px;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.12em}.org .name{font-weight:600}
   .livechip{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-mut);padding:5px 10px;border:1px solid var(--line);border-radius:99px;background:var(--panel-2)}
-  .livechip .dot{width:7px;height:7px;border-radius:50%;background:var(--logout)}
-  .livechip.live .dot{background:var(--on-call);animation:pulse 2s infinite}
-  .livechip.snap .dot{background:var(--dispo)}
-  .livechip.err .dot{background:var(--na)}
-  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(55,193,114,.5)}70%{box-shadow:0 0 0 7px rgba(55,193,114,0)}100%{box-shadow:0 0 0 0 rgba(55,193,114,0)}}
+  .livechip .dot{width:7px;height:7px;border-radius:50%;background:var(--ink-dim)}
+  .livechip.live .dot{background:var(--on-call)}.livechip.err .dot{background:var(--na)}
   button.refresh{font-family:inherit;font-size:13px;font-weight:600;color:#06231f;background:var(--accent);border:none;border-radius:8px;padding:9px 16px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:filter .15s,opacity .15s}
   button.refresh:hover{filter:brightness(1.08)}button.refresh:disabled{opacity:.55;cursor:progress}
   button.refresh svg{width:14px;height:14px}button.refresh.spin svg{animation:spin .8s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
-  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+  .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:20px}
   .stat{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--line-soft);border-radius:var(--radius);padding:14px 16px;position:relative;overflow:hidden}
   .stat::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--c,var(--ink-dim))}
   .stat .v{font-size:26px;font-weight:700;letter-spacing:-.02em;color:var(--c,var(--ink));line-height:1}
@@ -43,30 +33,29 @@
   .search input{width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;color:var(--ink);font-family:inherit;font-size:13px;padding:9px 12px 9px 34px;outline:none}
   .search input:focus{border-color:var(--accent-dim)}
   .search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--ink-dim)}
-  .chips{display:flex;gap:6px;flex-wrap:wrap}
-  .chip{font-size:12px;color:var(--ink-mut);background:var(--panel-2);border:1px solid var(--line);border-radius:99px;padding:6px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;user-select:none}
-  .chip[data-on="1"]{color:var(--ink);border-color:var(--accent-dim);background:#10211f}
-  .chip .cnt{color:var(--ink-dim);font-variant-numeric:tabular-nums}
+  .toggle{font-size:12px;color:var(--ink-mut);display:inline-flex;align-items:center;gap:7px;cursor:pointer;user-select:none;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2)}
+  .toggle input{accent-color:var(--accent)}
   .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
   .panel-head{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid var(--line)}
-  .panel-head h2{margin:0;font-size:13px;font-weight:600}
-  .panel-head .meta{font-size:12px;color:var(--ink-dim)}
+  .panel-head h2{margin:0;font-size:13px;font-weight:600}.panel-head .meta{font-size:12px;color:var(--ink-dim)}
   .scroll{overflow-x:auto}
-  table{border-collapse:collapse;width:100%;min-width:1080px}
+  table{border-collapse:collapse;width:100%;min-width:980px}
   thead th{position:sticky;top:0;background:var(--panel-2);text-align:left;font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-mut);padding:11px 14px;border-bottom:1px solid var(--line);white-space:nowrap;cursor:pointer;user-select:none}
+  thead th.num{text-align:right}
   thead th:hover{color:var(--ink)}thead th .arr{color:var(--accent);font-size:10px;margin-left:4px}
   tbody td{padding:12px 14px;border-bottom:1px solid var(--line-soft);vertical-align:middle;white-space:nowrap}
+  tbody td.num{text-align:right}
   tbody tr:hover{background:#172230}tbody tr:last-child td{border-bottom:none}
   .agent{display:flex;align-items:center;gap:11px}
   .ava{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-size:12px;font-weight:600;color:#0c1016;flex:none}
   .agent .nm{font-weight:600}.agent .em{font-size:11px;color:var(--ink-dim)}
-  .pill{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;padding:5px 11px;border-radius:99px;background:var(--pc-bg,#1c2430);color:var(--pc,#cbd6e4);border:1px solid var(--pc-br,#2a3646)}
-  .pill .d{width:7px;height:7px;border-radius:50%;background:var(--pc,#cbd6e4)}.pill.live .d{animation:pulse 2s infinite}
+  .bar{display:inline-flex;align-items:center;gap:8px;justify-content:flex-end}
+  .bar .t{font-weight:600}
+  .dotc{width:8px;height:8px;border-radius:50%;display:inline-block}
   .tag{display:inline-block;font-size:11px;color:var(--ink-mut);background:var(--panel-2);border:1px solid var(--line-soft);border-radius:6px;padding:3px 8px}
-  .grp{display:flex;gap:5px;flex-wrap:wrap;max-width:230px;white-space:normal}
-  .lvl{font-weight:600}.muted{color:var(--ink-dim)}.wait{font-weight:600}
-  .act{color:var(--ink-dim);cursor:pointer;padding:4px;border-radius:6px}.act:hover{color:var(--accent);background:#10211f}
-  .empty{padding:46px 30px;text-align:center;color:var(--ink-mut)}.empty b{color:var(--ink)}.empty .hint{display:block;margin-top:8px;font-size:12px;color:var(--ink-dim)}
+  .grp{display:flex;gap:5px;flex-wrap:wrap;max-width:210px;white-space:normal}
+  .muted{color:var(--ink-dim)}.zero{color:var(--ink-dim)}
+  .empty{padding:46px 30px;text-align:center;color:var(--ink-mut)}
   footer{margin-top:16px;font-size:11px;color:var(--ink-dim);display:flex;gap:14px;flex-wrap:wrap;align-items:center}
   .banner{display:none;margin-bottom:16px;border-radius:8px;padding:11px 14px;font-size:13px}
   .banner.warn{display:block;background:#221c10;border:1px solid #4a3c1d;color:#e9cf94}
@@ -75,14 +64,14 @@
 
 <div class="wrap">
   <header class="topbar">
-    <div class="brand"><span class="mark">Onyx<b>·</b>Ops</span><span class="sub">Real Time</span></div>
+    <div class="brand"><span class="mark">Onyx<b>·</b>Ops</span><span class="sub">Today's Activity</span></div>
     <div class="org">
       <div><span class="label">Org</span> &nbsp;<span class="name">Auren Health</span></div>
       <div><span class="label">Profile</span> &nbsp;<span class="name">Inbound Home Health Agent</span></div>
       <span class="livechip" id="livechip"><span class="dot"></span><span id="livetxt">Loading…</span></span>
-      <button class="refresh" id="refreshBtn" onclick="loadData(true)">
+      <button class="refresh" id="refreshBtn" onclick="loadData()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-        <span id="refreshLbl">Refresh</span>
+        <span>Refresh</span>
       </button>
     </div>
   </header>
@@ -93,154 +82,100 @@
   <div class="controls">
     <div class="search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-      <input id="q" placeholder="Search agent, team, group, or state…" oninput="render()">
+      <input id="q" placeholder="Search agent, team, group…" oninput="render()">
     </div>
-    <div class="chips" id="chips"></div>
+    <label class="toggle"><input type="checkbox" id="onlyActive" onchange="render()"> Only agents active today</label>
   </div>
 
   <div class="panel">
-    <div class="panel-head"><h2>Agents · sorted by longest time in status</h2><span class="meta" id="rowmeta"></span></div>
+    <div class="panel-head"><h2>Most Available today — sorted high to low</h2><span class="meta" id="rowmeta"></span></div>
     <div class="scroll"><table><thead><tr id="headrow"></tr></thead><tbody id="tbody"></tbody></table></div>
   </div>
 
   <footer>
     <span id="updstamp"></span><span>·</span>
     <span>Profile: Inbound Home Health Agent (511)</span><span>·</span>
-    <span id="autotxt"></span>
+    <span>Durations are today's running totals · refresh is manual</span>
   </footer>
 </div>
 
 <script>
-const REFRESH_MS = 15000;   // auto-refresh interval
-const GROUPS = {253:"Inbound Home Health Agent",367:"Sales Group STHHC",366:"STHHC V2",139:"Agent Medicare Inbound",243:"pc STHHC agents",128:"Agent Medicare Outbound"};
-const CAT = {
-  "On Call":{cat:"On Call",c:"--on-call",live:true},
-  "Online":{cat:"Available",c:"--available",live:true},"Reserved":{cat:"Available",c:"--available",live:true},
-  "Direct Inbound":{cat:"Available",c:"--available",live:true},"Available":{cat:"Available",c:"--available",live:true},
-  "Offline":{cat:"Not Available",c:"--na",live:false},"Not Available":{cat:"Not Available",c:"--na",live:false},
-  "Dispositioning":{cat:"Dispositioning",c:"--dispo",live:true},"Logged Out":{cat:"Logged Out",c:"--logout",live:false}
-};
-const catOf=s=>(CAT[s]||{cat:s}).cat, colorOf=s=>(CAT[s]||{c:"--logout"}).c, liveOf=s=>(CAT[s]||{}).live;
-const CATS=["Available","On Call","Not Available"];
-const CAT_COLOR={"Available":"--available","On Call":"--on-call","Not Available":"--na"};
-
-let rows=[], lastUpdated=null;
-let sortKey="_ts", sortDir=-1;                         // longest wait first
-let activeStatuses=new Set(["Available","On Call","Not Available"]);
-
-function mapRows(payload){
-  const idx={}; payload.columns.forEach((c,i)=>idx[c.name]=i);
-  const get=(r,k)=> k in idx ? r[idx[k]] : null;
-  return payload.rows.map(r=>{
-    let lic=get(r,"license_states");
-    if(typeof lic==="string"){try{lic=JSON.parse(lic.replace(/'/g,'"'));}catch(_){lic=[];}}
-    lic=Array.from(new Set(lic||[]));
-    const tsRaw=get(r,"current_activity_updated_at");
-    const status=get(r,"status");
-    return {
-      user_id:get(r,"user_id"), agent_name:get(r,"agent_name"), team_name:get(r,"team_name"),
-      agent_profile:get(r,"agent_profile"), work_type:get(r,"work_type"), worker_type:get(r,"worker_type"),
-      status, category:catOf(status), license_states:lic, crm_group_ids:get(r,"crm_group_ids")||[],
-      agent_level:get(r,"agent_level"), call_cap_daily:get(r,"call_cap_daily"), call_cap_hourly:get(r,"call_cap_hourly"),
-      _ts: tsRaw ? new Date(String(tsRaw).replace(" ","T")+"Z") : null
-    };
-  });
-}
+const GROUPS={253:"Inbound Home Health Agent",367:"Sales Group STHHC",366:"STHHC V2",139:"Agent Medicare Inbound",243:"pc STHHC agents",128:"Agent Medicare Outbound"};
+let agents=[], capturedAt=null;
+let sortKey="available_sec", sortDir=-1;
 
 const AVA=["#35d6c0","#5c8ff0","#e3a83b","#c879e8","#37c172","#e5594f","#4ec9b0","#f08a5d"];
 const initials=n=>{const p=(n||"").trim().split(/\s+/);return ((p[0]||"")[0]||"")+((p[1]||"")[0]||"")};
 const avaColor=id=>AVA[Math.abs(id)%AVA.length];
-function fmtDur(ms){if(ms==null)return"—";let s=Math.max(0,Math.floor(ms/1000));const d=Math.floor(s/86400);s-=d*86400;const h=Math.floor(s/3600);s-=h*3600;const m=Math.floor(s/60);s-=m*60;if(d>0)return d+"d "+h+"h";if(h>0)return h+"h "+m+"m";if(m>0)return m+"m "+String(s).padStart(2,"0")+"s";return s+"s";}
-function workType(o){const lic=o.worker_type==="LICENSED_INSURANCE_AGENT"?"Licensed":(o.worker_type==="UNLICENSED_WORKER"?"Unlicensed":o.worker_type);return{wt:o.work_type||"—",lic};}
+function fmt(sec){sec=Math.round(sec||0);if(sec<=0)return null;const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;if(h>0)return h+"h "+String(m).padStart(2,"0")+"m";if(m>0)return m+"m "+String(s).padStart(2,"0")+"s";return s+"s";}
+function hrs(sec){return (sec/3600).toFixed(1);}
 
-const HEADERS=[{k:"status",t:"Status"},{k:"agent_name",t:"Agent Name"},{k:"team_name",t:"Team"},{k:"agent_profile",t:"Agent Profile"},{k:"agent_level",t:"Level"},{k:"work_type",t:"Work Type"},{k:"_ts",t:"Time in Status"},{k:"license_states",t:"Licenses"},{k:"crm_group_ids",t:"Groups"},{k:"call_cap_daily",t:"Call Cap"},{k:"__act",t:""}];
-
+const HEADERS=[
+  {k:"rank",t:"#",num:false},{k:"agent_name",t:"Agent Name",num:false},{k:"team_name",t:"Team",num:false},
+  {k:"available_sec",t:"Available today",num:true}
+];
 function renderHead(){
   document.getElementById("headrow").innerHTML=HEADERS.map(h=>{
-    let arr=""; if(sortKey===h.k) arr=`<span class="arr">${(h.k==="_ts"?(sortDir<0?"▼":"▲"):(sortDir>0?"▲":"▼"))}</span>`;
-    return `<th ${h.k==="__act"?"":`onclick="setSort('${h.k}')"`}>${h.t}${arr}</th>`;
+    let arr=sortKey===h.k?`<span class="arr">${sortDir<0?"▼":"▲"}</span>`:"";
+    return `<th class="${h.num?'num':''}" onclick="setSort('${h.k}')">${h.t}${arr}</th>`;
   }).join("");
 }
 function renderStats(){
-  const c={}; ["Available","On Call","Not Available","Dispositioning","Logged Out"].forEach(k=>c[k]=0);
-  rows.forEach(r=>{c[r.category]=(c[r.category]||0)+1});
-  const loggedIn=rows.length-(c["Logged Out"]||0);
-  const util=loggedIn?Math.round(((c["On Call"]||0)/loggedIn)*100):0;
-  const tiles=[{k:"Utilization",v:util+"%",c:"--accent"},{k:"Available",v:c["Available"]||0,c:"--available"},{k:"On Call",v:c["On Call"]||0,c:"--on-call"},{k:"Not Available",v:c["Not Available"]||0,c:"--na"}];
+  const active=agents.filter(a=>a.active_today).length;
+  const sum=k=>agents.reduce((t,a)=>t+(a[k]||0),0);
+  const tiles=[
+    {k:"Active today",v:active+" / "+agents.length,c:"--accent"},
+    {k:"Total Available (hrs)",v:hrs(sum("available_sec")),c:"--available"}
+  ];
   document.getElementById("stats").innerHTML=tiles.map(t=>`<div class="stat" style="--c:var(${t.c})"><div class="v">${t.v}</div><div class="k">${t.k}</div></div>`).join("");
-  document.getElementById("chips").innerHTML=CATS.map(s=>`<span class="chip" data-on="${activeStatuses.has(s)?1:0}" onclick="toggleStatus('${s}')"><span class="d" style="width:7px;height:7px;border-radius:50%;background:var(${CAT_COLOR[s]})"></span>${s} <span class="cnt">${c[s]||0}</span></span>`).join("");
 }
+function cell(sec,color){const f=fmt(sec);return f?`<span class="bar"><span class="dotc" style="background:var(${color})"></span><span class="t mono">${f}</span></span>`:`<span class="zero">—</span>`;}
 function render(){
   const q=(document.getElementById("q").value||"").toLowerCase().trim();
-  let view=rows.filter(r=>{
-    if(activeStatuses.size && !activeStatuses.has(r.category)) return false;
+  const onlyActive=document.getElementById("onlyActive").checked;
+  let view=agents.filter(a=>{
+    if(onlyActive && !a.active_today) return false;
     if(!q) return true;
-    return [r.agent_name,r.team_name,r.agent_profile,r.status,...(r.license_states||[]),...(r.crm_group_ids||[]).map(g=>GROUPS[g]||g)].join(" ").toLowerCase().includes(q);
+    return [a.agent_name,a.team_name,...(a.license_states||[]),...(a.crm_group_ids||[]).map(g=>GROUPS[g]||g)].join(" ").toLowerCase().includes(q);
   });
-  const now=Date.now();
-  view.sort((a,b)=>{
-    let x=a[sortKey],y=b[sortKey];
-    if(sortKey==="license_states"||sortKey==="crm_group_ids"){x=(x||[]).length;y=(y||[]).length;}
-    else if(sortKey==="_ts"){x=a._ts?(now-a._ts.getTime()):-Infinity;y=b._ts?(now-b._ts.getTime()):-Infinity;}
-    if(x==null)x=-Infinity;if(y==null)y=-Infinity;
-    if(typeof x==="string")return x.localeCompare(y)*sortDir;
-    return (x-y)*sortDir;
+  view.sort((x,y)=>{
+    let a=x[sortKey],b=y[sortKey];
+    if(sortKey==="license_states"||sortKey==="crm_group_ids"){a=(a||[]).length;b=(b||[]).length;}
+    if(a==null)a=-Infinity;if(b==null)b=-Infinity;
+    if(typeof a==="string")return a.localeCompare(b)*sortDir;
+    return (a-b)*sortDir;
   });
   const tb=document.getElementById("tbody");
-  if(!view.length){
-    const allOut=rows.length>0 && rows.every(r=>r.category==="Logged Out"||r.category==="Dispositioning");
-    tb.innerHTML=`<tr><td colspan="11"><div class="empty"><b>No Inbound Home Health Agents are Available, On Call, or Not Available right now.</b><span class="hint">${allOut?"All "+rows.length+" agents on this profile are currently logged out (off-hours). They'll appear here automatically once they sign in.":"No agents match the current search/filters."}</span></div></td></tr>`;
-  } else tb.innerHTML=view.map(r=>{
-    const {wt,lic}=workType(r); const st=r.status, live=liveOf(st);
-    const ls=r.license_states||[];
-    const licCell=ls.length?`<span class="tag" title="${ls.join(", ")}">${ls.length} state${ls.length>1?"s":""}</span>`:`<span class="muted">—</span>`;
-    const grpCell=(r.crm_group_ids||[]).length?`<div class="grp">${r.crm_group_ids.map(g=>`<span class="tag" title="Group #${g}">${GROUPS[g]||("#"+g)}</span>`).join("")}</div>`:`<span class="muted">—</span>`;
-    const capCell=(r.call_cap_daily!=null||r.call_cap_hourly!=null)?`<span class="mono">${r.call_cap_daily??"—"}<span class="muted">/d</span> · ${r.call_cap_hourly??"—"}<span class="muted">/h</span></span>`:`<span class="muted">—</span>`;
-    const lvlCell=r.agent_level!=null?`<span class="lvl mono">${r.agent_level}</span>`:`<span class="muted">—</span>`;
-    const dur=r._ts?fmtDur(now-r._ts.getTime()):"—";
-    const team=r.team_name?r.team_name:`<span class="muted">—</span>`;
+  if(!view.length){tb.innerHTML=`<tr><td colspan="4"><div class="empty">No agents match.</div></td></tr>`;}
+  else tb.innerHTML=view.map((a,i)=>{
+    const team=a.team_name?a.team_name:`<span class="muted">—</span>`;
     return `<tr>
-      <td><span class="pill ${live?"live":""}" style="--pc:var(${colorOf(st)});--pc-bg:color-mix(in srgb, var(${colorOf(st)}) 14%, transparent);--pc-br:color-mix(in srgb, var(${colorOf(st)}) 38%, transparent)"><span class="d"></span>${st}</span></td>
-      <td><div class="agent"><div class="ava" style="background:${avaColor(r.user_id)}">${initials(r.agent_name)}</div><div><div class="nm">${r.agent_name}</div><div class="em">#${r.user_id}</div></div></div></td>
-      <td>${team}</td><td>${r.agent_profile}</td><td>${lvlCell}</td>
-      <td>${wt} <span class="muted">· ${lic}</span></td>
-      <td><span class="wait mono dur" data-ts="${r._ts?r._ts.getTime():""}">${dur}</span></td>
-      <td>${licCell}</td><td>${grpCell}</td><td>${capCell}</td>
-      <td><span class="act" title="More">⋯</span></td></tr>`;
+      <td class="muted mono">${i+1}</td>
+      <td><div class="agent"><div class="ava" style="background:${avaColor(a.user_id)}">${initials(a.agent_name)}</div><div><div class="nm">${a.agent_name}</div><div class="em">#${a.user_id}</div></div></div></td>
+      <td>${team}</td>
+      <td class="num">${cell(a.available_sec,'--available')}</td>
+    </tr>`;
   }).join("");
-  document.getElementById("rowmeta").textContent=`${view.length} of ${rows.length} agents`;
-  renderStats(); renderHead();
-  if(lastUpdated) document.getElementById("updstamp").textContent=`Updated ${lastUpdated.toLocaleString([], {hour:"2-digit",minute:"2-digit",second:"2-digit",month:"short",day:"numeric"})}`;
+  document.getElementById("rowmeta").textContent=`${view.length} of ${agents.length} agents`;
+  renderStats();renderHead();
+  if(capturedAt) document.getElementById("updstamp").textContent=`As of ${new Date(capturedAt).toLocaleString([], {hour:"2-digit",minute:"2-digit",second:"2-digit",month:"short",day:"numeric"})}`;
 }
-function setSort(k){if(sortKey===k)sortDir*=-1;else{sortKey=k;sortDir=(k==="_ts"||k==="agent_level")?-1:1;}render();}
-function toggleStatus(s){activeStatuses.has(s)?activeStatuses.delete(s):activeStatuses.add(s);render();}
+function setSort(k){if(sortKey===k)sortDir*=-1;else{sortKey=k;sortDir=(k==="agent_name"||k==="team_name")?1:-1;}render();}
 
-setInterval(()=>{const now=Date.now();document.querySelectorAll(".dur").forEach(el=>{const ts=el.getAttribute("data-ts");if(ts)el.textContent=fmtDur(now-Number(ts));});},1000);
-
-async function loadData(manual){
+async function loadData(){
   const btn=document.getElementById("refreshBtn"),chip=document.getElementById("livechip"),txt=document.getElementById("livetxt"),banner=document.getElementById("banner");
-  if(manual){btn.disabled=true;btn.classList.add("spin");}
+  btn.disabled=true;btn.classList.add("spin");
   try{
     const res=await fetch("/api/agents",{cache:"no-store"});
-    if(!res.ok) throw new Error("HTTP "+res.status);
-    const payload=await res.json();
-    rows=mapRows(payload); lastUpdated=new Date();
-    if(payload.source==="live"){chip.className="livechip live";txt.textContent="Live";banner.className="banner";}
-    else{
-      chip.className="livechip snap";txt.textContent="Snapshot";
-      banner.className="banner warn";
-      banner.textContent = payload.error
-        ? "Showing the bundled snapshot — couldn't reach Onyx live: "+payload.error
-        : "Showing the bundled snapshot. Set the Onyx API key on the server to switch to live data.";
-    }
+    const p=await res.json();
+    agents=p.agents||[];capturedAt=p.captured_at;
+    if(p.source==="live"){chip.className="livechip live";txt.textContent=p.cached?"Live (cached)":"Live";banner.className="banner";}
+    else{chip.className="livechip err";txt.textContent="Error";banner.className="banner warn";banner.textContent=p.error?("Couldn't reach Onyx: "+p.error+" — showing roster with zero times."):"Showing roster only.";}
     render();
   }catch(e){
     chip.className="livechip err";txt.textContent="Offline";
-    banner.className="banner warn";banner.textContent="Couldn't load data from the server: "+e.message;
-  }finally{if(manual){btn.disabled=false;btn.classList.remove("spin");}}
+    banner.className="banner warn";banner.textContent="Couldn't load: "+e.message;
+  }finally{btn.disabled=false;btn.classList.remove("spin");}
 }
-
-document.getElementById("autotxt").textContent=`Manual refresh only � tap Refresh to update`;
-loadData(false);
-
+loadData();
 </script>
