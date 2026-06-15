@@ -93,7 +93,7 @@
 
   <footer>
     <span id="updstamp"></span><span>·</span>
-    <span>Time in Status = today's total in that state</span><span>·</span>
+    <span>Time in Status = live, since current state began</span><span>·</span>
     <span>Refresh is manual</span>
   </footer>
 </div>
@@ -109,10 +109,19 @@ let agents=[], capturedAt=null;
 let sortKey="_ts", sortDir=1;                          // oldest start first = longest in status
 let activeStatuses=new Set(["Available","On Call","Not Available"]);
 
-function parseUTC(s){ if(!s) return null; const hasTz=/[zZ]|[+-]\d\d:?\d\d$/.test(s); return new Date(hasTz?s:s+"Z"); }
+function parseUTC(s){ if(!s) return null; const hasTz=/[zZ]|[+-]\d\d:?\d\d$/.test(s); const d=new Date(hasTz?s:s+"Z"); return isNaN(d)?null:d; }
+const RAWMAP={ONLINE:"Available",RESERVED:"Available",DIRECT_INBOUND:"Available",AVAILABLE:"Available",ON_CALL:"On Call",OFFLINE:"Not Available",NOT_AVAILABLE:"Not Available",DISPOSITIONING:"Dispositioning",LOGGED_OUT:"Logged Out"};
 function decorate(a){
-  a._status = a.status || "Logged Out";
-  a._ts = parseUTC(a.start_time_utc);
+  // status: prefer display 'status', else raw 'current_activity', else derive from buckets
+  let st = a.status || a._status;
+  if(st && RAWMAP[String(st).toUpperCase()]) st = RAWMAP[String(st).toUpperCase()];
+  if(!st && a.current_activity) st = RAWMAP[String(a.current_activity).toUpperCase()] || a.current_activity;
+  if(!st && (a.available_sec!=null||a.on_call_sec!=null)){
+    const b=[["On Call",a.on_call_sec],["Available",a.available_sec],["Not Available",a.not_available_sec],["Dispositioning",a.dispositioning_sec],["Logged Out",a.logged_out_sec]];
+    let max=-1; st="Logged Out"; for(const [k,v] of b){ if((v||0)>max){max=v||0;st=k;} }
+  }
+  a._status = st || "Logged Out";
+  a._ts = parseUTC(a.start_time_utc || a.current_activity_updated_at || a.started_at);
   return a;
 }
 const AVA=["#35d6c0","#5c8ff0","#e3a83b","#c879e8","#37c172","#e5594f","#4ec9b0","#f08a5d"];
@@ -191,9 +200,15 @@ async function loadData(){
   try{
     const res=await fetch("/api/agents",{cache:"no-store"});
     const p=await res.json();
-    agents=(p.agents||[]).map(decorate);capturedAt=p.captured_at;
-    if(p.source==="live"){chip.className="livechip live";txt.textContent=p.cached?"Live (cached)":"Live";banner.className="banner";}
-    else{chip.className="livechip err";txt.textContent="Error";banner.className="banner warn";banner.textContent=p.error?("Couldn't reach Onyx: "+p.error):"Showing roster only.";}
+    // accept either {agents:[...]} (new) or {columns,rows} (old) payloads
+    let list=p.agents;
+    if(!list && Array.isArray(p.rows) && Array.isArray(p.columns)){
+      const idx={}; p.columns.forEach((c,i)=>idx[c.name]=i);
+      list=p.rows.map(r=>{const o={};for(const k in idx)o[k]=r[idx[k]];return o;});
+    }
+    agents=(list||[]).map(decorate);capturedAt=p.captured_at;
+    if(p.error){chip.className="livechip err";txt.textContent="Error";banner.className="banner warn";banner.textContent="Onyx: "+p.error;}
+    else{chip.className="livechip live";txt.textContent=p.cached?"Live (cached)":"Live";banner.className="banner";}
     render();
   }catch(e){chip.className="livechip err";txt.textContent="Offline";banner.className="banner warn";banner.textContent="Couldn't load: "+e.message;}
   finally{btn.disabled=false;btn.classList.remove("spin");}
