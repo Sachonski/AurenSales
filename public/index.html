@@ -104,19 +104,15 @@ const STATUS_META={
   "On Call":{c:"--on-call"},"Available":{c:"--available"},"Not Available":{c:"--na"},
   "Dispositioning":{c:"--dispo"},"Logged Out":{c:"--logout"}
 };
-// dominant-status pick order when tied/zero
-const BUCKETS=[["On Call","on_call_sec"],["Available","available_sec"],["Not Available","not_available_sec"],["Dispositioning","dispositioning_sec"],["Logged Out","logged_out_sec"]];
-
+// dominant-status pick order (unused now; kept for status colors)
 let agents=[], capturedAt=null;
-let sortKey="_t", sortDir=-1;                          // default: longest time in status
+let sortKey="_ts", sortDir=1;                          // oldest start first = longest in status
 let activeStatuses=new Set(["Available","On Call","Not Available"]);
 
+function parseUTC(s){ if(!s) return null; const hasTz=/[zZ]|[+-]\d\d:?\d\d$/.test(s); return new Date(hasTz?s:s+"Z"); }
 function decorate(a){
-  // current status = state with most time today; time in status = that total
-  let status="Logged Out", max=-1;
-  for(const [label,key] of BUCKETS){ const v=a[key]||0; if(v>max){max=v;status=label;} }
-  a._status = (max<=0) ? "Logged Out" : status;
-  a._t = (max<=0) ? 0 : max;
+  a._status = a.status || "Logged Out";
+  a._ts = parseUTC(a.start_time_utc);
   return a;
 }
 const AVA=["#35d6c0","#5c8ff0","#e3a83b","#c879e8","#37c172","#e5594f","#4ec9b0","#f08a5d"];
@@ -128,14 +124,14 @@ function workType(a){const lic=a.worker_type==="LICENSED_INSURANCE_AGENT"?"Licen
 const HEADERS=[
   {k:"_status",t:"Status"},{k:"agent_name",t:"Agent Name"},{k:"team_name",t:"Team"},
   {k:"agent_profile",t:"Agent Profile"},{k:"agent_level",t:"Level"},{k:"work_type",t:"Work Type"},
-  {k:"_t",t:"Time in Status"},{k:"license_states",t:"Licenses"},{k:"crm_group_ids",t:"Groups"},
+  {k:"_ts",t:"Time in Status"},{k:"license_states",t:"Licenses"},{k:"crm_group_ids",t:"Groups"},
   {k:"call_cap_daily",t:"Call Cap"}
 ];
 const CATS=["Available","On Call","Not Available"];
 
 function renderHead(){
   document.getElementById("headrow").innerHTML=HEADERS.map(h=>{
-    let arr=""; if(sortKey===h.k) arr=`<span class="arr">${(h.k==="_t"||h.k==="agent_level")?(sortDir<0?"▼":"▲"):(sortDir>0?"▲":"▼")}</span>`;
+    let arr=""; if(sortKey===h.k) arr=`<span class="arr">${(h.k==="_ts"||h.k==="agent_level")?(sortDir<0?"▼":"▲"):(sortDir>0?"▲":"▼")}</span>`;
     return `<th onclick="setSort('${h.k}')">${h.t}${arr}</th>`;
   }).join("");
 }
@@ -158,6 +154,7 @@ function render(){
   view.sort((x,y)=>{
     let a=x[sortKey],b=y[sortKey];
     if(sortKey==="license_states"||sortKey==="crm_group_ids"){a=(a||[]).length;b=(b||[]).length;}
+    else if(sortKey==="_ts"){a=a?a.getTime():Infinity;b=b?b.getTime():Infinity;}
     if(a==null)a=-Infinity;if(b==null)b=-Infinity;
     if(typeof a==="string")return a.localeCompare(b)*sortDir;
     return (a-b)*sortDir;
@@ -178,14 +175,14 @@ function render(){
       <td><div class="agent"><div class="ava" style="background:${avaColor(a.user_id)}">${initials(a.agent_name)}</div><div><div class="nm">${a.agent_name}</div><div class="em">#${a.user_id}</div></div></div></td>
       <td>${team}</td><td>${a.agent_profile||'<span class="muted">—</span>'}</td><td>${lvlCell}</td>
       <td>${wtCell}</td>
-      <td><span class="wait mono">${fmtDur(a._t)}</span></td>
+      <td><span class="wait mono dur" data-ts="${a._ts?a._ts.getTime():''}">${a._ts?fmtDur((Date.now()-a._ts.getTime())/1000):'—'}</span></td>
       <td>${licCell}</td><td>${grpCell}</td><td>${capCell}</td></tr>`;
   }).join("");
   document.getElementById("rowmeta").textContent=`${view.length} of ${agents.length} agents`;
   renderStats();renderHead();
   if(capturedAt) document.getElementById("updstamp").textContent=`As of ${new Date(capturedAt).toLocaleString([], {hour:"2-digit",minute:"2-digit",second:"2-digit",month:"short",day:"numeric"})}`;
 }
-function setSort(k){if(sortKey===k)sortDir*=-1;else{sortKey=k;sortDir=(k==="_t"||k==="agent_level")?-1:1;}render();}
+function setSort(k){if(sortKey===k)sortDir*=-1;else{sortKey=k;sortDir=(k==="agent_level")?-1:(k==="_ts"?1:1);}render();}
 function toggleStatus(s){activeStatuses.has(s)?activeStatuses.delete(s):activeStatuses.add(s);render();}
 
 async function loadData(){
@@ -201,5 +198,6 @@ async function loadData(){
   }catch(e){chip.className="livechip err";txt.textContent="Offline";banner.className="banner warn";banner.textContent="Couldn't load: "+e.message;}
   finally{btn.disabled=false;btn.classList.remove("spin");}
 }
+setInterval(()=>{const now=Date.now();document.querySelectorAll(".dur").forEach(el=>{const ts=el.getAttribute("data-ts");if(ts)el.textContent=fmtDur((now-Number(ts))/1000);});},1000);
 loadData();
 </script>
